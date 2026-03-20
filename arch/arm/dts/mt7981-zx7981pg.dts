@@ -1,0 +1,58 @@
+/dts-v1/;
+#include "mt7981.dtsi"
+
+/ {
+    model = "ZX7981PG";
+    compatible = "zte,zx7981pg", "mediatek,mt7981";
+
+    chosen {
+        stdout-path = &uart0; // 串口0作为调试输出
+        bootargs = "console=ttyS0,115200n8 root=/dev/mtdblock3 rw mtdparts=mt7981-nand:256k(uboot),64k(uboot_env),128k(factory),-(firmware)";
+    };
+
+    memory@40000000 {
+        device_type = "memory";
+        reg = <0 0x40000000 0 0x80000000>; // 2GB内存（根据实际调整）
+    };
+};
+
+&uart0 {
+    status = "okay";
+    u-boot,dm-pre-reloc; // uboot阶段启用串口
+};
+
+&spi0 {
+    status = "okay";
+    flash@0 {
+        compatible = "jedec,spi-nor"; // SPI Flash兼容
+        reg = <0>;
+        spi-max-frequency = <50000000>;
+        partitions {
+            compatible = "fixed-partitions";
+            #address-cells = <1>;
+            #size-cells = <1>;
+
+            uboot@0 {
+                label = "uboot";
+                reg = <0x0 0x40000>; // 256k
+                read-only;
+            };
+
+            uboot_env@40000 {
+                label = "uboot_env";
+                reg = <0x40000 0x10000>; // 64k
+            };
+
+            factory@50000 {
+                label = "factory";
+                reg = <0x50000 0x20000>; // 128k
+                read-only;
+            };
+
+            firmware@70000 {
+                label = "firmware";
+                reg = <0x70000 0xff90000>; // 剩余空间
+            };
+        };
+    };
+};
