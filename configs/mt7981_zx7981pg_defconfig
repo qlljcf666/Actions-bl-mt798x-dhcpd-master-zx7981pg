@@ -1,0 +1,7 @@
+# 在uboot配置中添加（可写入configs/mt7981_zx7981pg_defconfig）
+CONFIG_EXTRA_ENV_SETTINGS="\
+    bootcmd=run boot_firmware;\
+    boot_firmware=sf probe 0; sf read 0x44000000 0x70000 0x1000000; bootm 0x44000000;\
+    ipaddr=192.168.1.1;\
+    serverip=192.168.1.2;\
+"
