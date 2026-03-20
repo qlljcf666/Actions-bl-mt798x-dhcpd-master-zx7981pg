@@ -1,0 +1,67 @@
+name: Compile U-Boot for ZX7981PG (Multi-System)
+on:
+  push:
+分支: [ master ]
+    paths:
+      - '.github/workflows/compile-uboot.yml'
+      - 'configs/mt7981_zx7981pg_defconfig'
+      - 'arch/arm/dts/mt7981-zx7981pg.dts'
+  workflow_dispatch: # 手动触发编译
+
+jobs:
+  compile:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: 1. 安装编译依赖
+        run: |
+          sudo apt update && sudo apt install -y \
+            build-essential gcc-arm-linux-gnueabi gcc-aarch64-linux-gnu \
+            bison flex libssl-dev device-tree-compiler git wget \
+            python3 python3-pip rsync unzip bc
+
+      - name: 2. 拉取代码
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive # 拉取子模块（uboot依赖）
+
+      - name: 3. 适配ZX7981PG硬件配置
+        run: |
+          # 复制并修改默认配置为ZX7981PG专用配置
+          cp configs/mt7981_defconfig configs/mt7981_zx7981pg_defconfig
+          # 启用多系统分区识别、SPI Flash支持、串口调试
+          echo "CONFIG_MTD_PARTITIONS=y" >> configs/mt7981_zx7981pg_defconfig
+          echo "CONFIG_CMD_MTDPARTS=y" >> configs/mt7981_zx7981pg_defconfig
+          echo "CONFIG_SPI_FLASH=y" >> configs/mt7981_zx7981pg_defconfig
+          echo "CONFIG_SERIAL_CONSOLE=y" >> configs/mt7981_zx7981pg_defconfig
+          echo "CONFIG_BAUDRATE=115200" >> configs/mt7981_zx7981pg_defconfig
+          # 适配多系统通用分区表（关键：统一firmware分区名称）
+          echo "CONFIG_MTDPARTS_DEFAULT=\"mtdparts=mt7981-nand:256k(uboot),64k(uboot_env),128k(factory),-(firmware)\"" >> configs/mt7981_zx7981pg_defconfig
+
+      - name: 4. 编译uboot
+        run: |
+          # 设置交叉编译工具链（MT7981是ARM64架构）
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export ARCH=arm64
+          # 加载ZX7981PG配置
+          make mt7981_zx7981pg_defconfig
+          # 编译（-j后接线程数，适配GitHub云服务器）
+          make -j$(nproc)
+
+      - name: 5. 打包输出文件
+        run: |
+          # 收集编译产物（uboot.bin是核心，u-boot.itb是设备树合并版）
+          mkdir -p output
+          cp u-boot.bin output/uboot-zx7981pg-multi-system.bin
+          cp u-boot.itb output/uboot-zx7981pg-multi-system.itb
+          # 生成分区表说明
+          echo "ZX7981PG 多系统通用分区表：
+          - uboot: 256k (uboot镜像)
+          - uboot_env: 64k (环境变量)
+          - factory: 128k (出厂配置)
+          - firmware: 剩余空间（兼容qwrt/openwrt/immwrt/istore/xwrt）" > output/partition-info.txt
+
+      - name: 6. 上传编译产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: uboot-zx7981pg-multi-system
+          path: output/
